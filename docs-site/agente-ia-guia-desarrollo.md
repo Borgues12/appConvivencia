@@ -8,34 +8,57 @@
 
 ### Ejecución
 
-	▸ Un paso a la vez: si el usuario entrega un plan o lista de pasos, entregar solo el paso actual completo y funcional, y detenerse antes de avanzar al siguiente.
-	▸ No pedir confirmación de contexto si la arquitectura ya está descrita en requerimientos-y-stack.md; asumirla y ejecutar directo.
-	▸ Si una tarea requiere tocar otro archivo o dependencia adicional, hacerlo sin preguntar y dejar una nota breve al final de la respuesta.
-	▸ No rehacer ni analizar el sistema completo salvo que la tarea lo exija explícitamente.
-	▸ Código listo para producción: TypeScript estricto, pnpm, y las herramientas definidas en requerimientos-y-stack.md.
+    ▸ Un paso a la vez: si el usuario entrega un plan o lista de pasos, entregar solo el paso actual completo y funcional, y detenerse antes de avanzar al siguiente.
+    ▸ No pedir confirmación de contexto si la arquitectura ya está descrita en requerimientos-y-stack.md; asumirla y ejecutar directo.
+    ▸ Si una tarea requiere tocar otro archivo o dependencia adicional, hacerlo sin preguntar y dejar una nota breve al final de la respuesta.
+    ▸ No rehacer ni analizar el sistema completo salvo que la tarea lo exija explícitamente.
+    ▸ Manejo de dependencias: Todos los paquetes deben ser instalados únicamente usando `pnpm`.
+    ▸ Código listo para producción: TypeScript estricto, pnpm y las herramientas definidas en requerimientos-y-stack.md.
+	▸ No ejecutar codigo, sino mostrar secciones a modificar mas explicacion minuscula pero precisa de como funciona su idea general (ayuda al flujo de aprendizaje debido a que es la primera aplicacion en react native)
 
 ### Documentos de referencia
 
-	▸ requerimientos-y-stack.md — stack, arquitectura y reglas de negocio de cada módulo
-	▸ mvp.md — qué entra y qué no entra en la primera versión funcional
+    ▸ requerimientos-y-stack.md — stack, arquitectura y reglas de negocio de cada módulo
+    ▸ mvp.md — qué entra y qué no entra en la primera versión funcional
 
 ## ◆ Reglas No Negociables
 
 ### Proceso
 
-	▸ Commits semánticos desde el día 1 (feat, fix, refactor, docs)
-	▸ README del repositorio en inglés, pensado como portafolio internacional
-	▸ No copiar código sin entenderlo; preferir analogías antes de implementar
-	▸ Refactorizar al cerrar cada módulo, no al final del proyecto
+    ▸ Commits semánticos desde el día 1 (feat, fix, refactor, docs)
+    ▸ README del repositorio en inglés, pensado como portafolio internacional
+    ▸ No copiar código sin entenderlo; preferir analogías antes de implementar
+    ▸ Refactorizar al cerrar cada módulo, no al final del proyecto
 
 ### Arquitectura obligatoria
 
-	▸ Ninguna pantalla accede directo a Firestore o a APIs externas; siempre pasa por un repositorio
-	▸ Repository Pattern y Clean Architecture simplificada, tal como se definen en requerimientos-y-stack.md
-	▸ Firestore Security Rules validando membresía de sala desde el primer commit del módulo correspondiente
+    ▸ Ninguna pantalla accede directo a Firestore o a APIs externas; siempre pasa por un repositorio.
+    ▸ Repository Pattern y Clean Architecture simplificada, tal como se definen en requerimientos-y-stack.md.
+    ▸ Firestore Security Rules validando membresía de sala desde el primer commit del módulo correspondiente.
+    ▸ Prefijo de Entidad en Propiedades: Todos los campos de esquemas (Zod), interfaces y modelos deben incluir un prefijo distintivo según la entidad a la que pertenecen (ej. `salaId`, `salaNombre` para Sala; `userUid`, `userDisplayName`, `userEmail` para Usuario) para garantizar consistencia semántica en todo el sistema.
+    ▸ Idioma de Funciones vs. Dominio: Únicamente los nombres de funciones y métodos deben escribirse en inglés (ej. `export async function findByInvitationCode`, `getRoomById`). El resto de la estructura (esquemas de Zod, variables, nombres de archivos e interfaces) se mantiene en español con sus respectivos prefijos.
 
 ### Enfoque de trabajo
 
-	▸ MVP-driven: cada módulo se construye en dos olas, Ola 1 funcional y Ola 2 de refinamiento
-	▸ Mínimo 3 a 5 días de uso real de la sala entre Ola 1 y Ola 2 antes de refinar
-	▸ El orden de las Olas 2 se decide según el feedback de uso real, no según el orden de este documento
+    ▸ MVP-driven: cada módulo se construye en dos olas, Ola 1 funcional y Ola 2 de refinamiento.
+    ▸ Mínimo 3 a 5 días de uso real de la sala entre Ola 1 y Ola 2 antes de refinar.
+    ▸ El orden de las Olas 2 se decide según el feedback de uso real, no según el orden de este documento.
+
+## ◆ Entorno de Desarrollo, Debugging y Despliegue
+
+### Flujo de Ejecución y Pruebas
+Dado que no se utilizan emuladores por limitaciones técnicas/seguridad:
+
+    ▸ Generar Development Build (al agregar nuevas librerías):
+      pnpm exec eas build --profile development --platform android
+
+    ▸ Instalación directa en teléfono por ADB:
+      adb devices
+      adb install tu-archivo.apk
+
+    ▸ Levantar servidor de desarrollo:
+      pnpm expo start --dev-client
+
+    ▸ Doble entorno de Debugging (Físico + Web):
+      Se utiliza una instancia web en paralelo (`pnpm expo start --web` o similar) únicamente para probar la vinculación de cuentas, eventos en tiempo real y sincronización entre dispositivos.
+      Importante: El soporte web es exclusivamente un entorno de debugging temporal para desarrollo y no forma parte del despliegue final a producción.

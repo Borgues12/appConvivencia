@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "755275856903",
+    "project_id": "coexistence-c36b5",
+    "storage_bucket": "coexistence-c36b5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:755275856903:android:841c275d15262358b07ea2",
+        "android_client_info": {
+          "package_name": "com.borgues.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "755275856903-ogrh59dt95t06kvqrii6vcu30frh2ge2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.borgues.mobile",
+            "certificate_hash": "649d8a5520b12ebf20dde5e226fd331010b67901"
+          }
+        },
+        {
+          "client_id": "755275856903-uput1gpshfaogag9moh7rmm0bm8gbeu6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCV3FlmbRe4HItgdV68EI7KWf2dJ-cQjjA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "755275856903-uput1gpshfaogag9moh7rmm0bm8gbeu6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

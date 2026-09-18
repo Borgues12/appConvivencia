@@ -26,7 +26,69 @@ service cloud.firestore {
         && request.resource.data.salaNombre == resource.data.salaNombre
         && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion
         && request.resource.data.salaAdminUid == resource.data.salaAdminUid;
-    }
 
-  }
+      // Salir (no-admin): quita el propio uid, el admin no cambia
+      allow update: if request.auth != null
+        && request.auth.uid != resource.data.salaAdminUid
+        && !(request.auth.uid in request.resource.data.salaMiembros)
+        && request.resource.data.salaMiembros ==
+             resource.data.salaMiembros.removeAll([request.auth.uid])
+        && request.resource.data.salaNombre == resource.data.salaNombre
+        && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion
+        && request.resource.data.salaAdminUid == resource.data.salaAdminUid;
+
+      // Salir (admin): quita el propio uid y transfiere salaAdminUid a alguien
+      // que siga en la sala; bloqueado si el admin es el único miembro
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.salaAdminUid
+        && resource.data.salaMiembros.size() > 1
+        && !(request.auth.uid in request.resource.data.salaMiembros)
+        && request.resource.data.salaMiembros ==
+             resource.data.salaMiembros.removeAll([request.auth.uid])
+        && request.resource.data.salaAdminUid != request.auth.uid
+        && request.resource.data.salaAdminUid in request.resource.data.salaMiembros
+        && request.resource.data.salaNombre == resource.data.salaNombre
+        && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion;
+    }
+    match /sesiones/{sesionId} {
+      // Lectura
+      allow read: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/salas/$(resource.data.sesionSalaId)).data.salaMiembros;
+
+      // Iniciar sesión (pendiente -> en_curso)
+      allow update: if request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/salas/$(resource.data.sesionSalaId)).data.salaMiembros
+        && resource.data.sesionEstado == 'pendiente'
+        && request.resource.data.sesionEstado == 'en_curso'
+        && request.resource.data.sesionIniciadaPorUid == request.auth.uid
+        && request.resource.data.sesionPin is string
+        && request.resource.data.sesionSalaId == resource.data.sesionSalaId
+        && request.resource.data.sesionFecha == resource.data.sesionFecha;
+
+      // Cancelar (admin)
+      allow update: if request.auth != null
+        && request.auth.uid == get(/databases/$(database)/documents/salas/$(resource.data.sesionSalaId)).data.salaAdminUid
+        && (resource.data.sesionEstado == 'pendiente' || resource.data.sesionEstado == 'en_curso')
+        && request.resource.data.sesionEstado == 'cancelada'
+        && request.resource.data.sesionCanceladaPorUid == request.auth.uid
+        && request.resource.data.sesionCanceladaMotivo is string
+        && request.resource.data.sesionCanceladaMotivo.size() > 0
+        && request.resource.data.sesionSalaId == resource.data.sesionSalaId
+        && request.resource.data.sesionFecha == resource.data.sesionFecha;
+
+      // SUBCOLECCIÓN: /sesiones/{sesionId}/checkins/{checkinUid}
+      match /checkins/{checkinUid} {
+        // Lectura: cualquier miembro de la sala
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/salas/$(get(/databases/$(database)/documents/sesiones/$(sesionId)).data.sesionSalaId)).data.salaMiembros;
+
+        // Creación: cada miembro registra su propio check-in
+        allow create: if request.auth != null
+          && request.auth.uid == checkinUid
+          && request.resource.data.checkinUserUid == checkinUid
+          && request.resource.data.checkinEstado in ['a_tiempo', 'retraso'];
+      }
+    }
 }
+}
+
