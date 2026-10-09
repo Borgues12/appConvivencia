@@ -3,6 +3,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import type { Notificador } from "../../notificaciones/sala-notificaciones";
 import { getEcuadorDate, getEcuadorMinutes, parseTimeToMinutes } from "../../shared/hora";
 import { MINUTOS_CIERRE } from "../../shared/tiempo-sesion";
+import { addFaultToBatch } from "../../faltas/logica/crearFalta.logica";
 
 // FUNCIÓN: cierra sesiones cuya ventana ya venció y genera las faltas correspondientes
 export async function closeExpiredSessions(
@@ -39,7 +40,14 @@ export async function closeExpiredSessions(
     if (sesion.sesionEstado === "pendiente") {
       batch.update(sesionDoc.ref, { sesionEstado: "perdida" });
       for (const userUid of salaMiembros) {
-        crearFalta(db, batch, sesionDoc.id, sesion, userUid, "abandono");
+        addFaultToBatch(db, batch, {
+          sesionId: sesionDoc.id,
+          salaId: sesion.sesionSalaId,
+          fecha: sesion.sesionFecha,
+          userUid: userUid,
+          tipo: "abandono",
+          motivo: null,
+        });
       }
       titulo = "Sesión perdida";
       cuerpo = "Nadie inició la sesión: se registró falta a todos los miembros.";
@@ -53,7 +61,14 @@ export async function closeExpiredSessions(
       let ausentes = 0;
       for (const userUid of salaMiembros) {
         if (!uidsConCheckin.has(userUid)) {
-          crearFalta(db, batch, sesionDoc.id, sesion, userUid, "ausencia");
+          addFaultToBatch(db, batch, {
+            sesionId: sesionDoc.id,
+            salaId: sesion.sesionSalaId,
+            fecha: sesion.sesionFecha,
+            userUid: userUid,
+            tipo: "ausencia",
+            motivo: null,
+          });
           ausentes++;
         }
       }
@@ -80,23 +95,3 @@ export async function closeExpiredSessions(
   return sesionesCerradas;
 }
 
-// FUNCIÓN: agrega al batch la creación de un registro de falta
-function crearFalta(
-  db: Firestore,
-  batch: FirebaseFirestore.WriteBatch,
-  sesionId: string,
-  sesion: FirebaseFirestore.DocumentData,
-  userUid: string,
-  tipo: "ausencia" | "abandono",
-) {
-  const faltaRef = db.collection("faltas").doc();
-  batch.set(faltaRef, {
-    faltaId: faltaRef.id,
-    faltaUserUid: userUid,
-    faltaSalaId: sesion.sesionSalaId,
-    faltaSesionId: sesionId,
-    faltaFecha: sesion.sesionFecha,
-    faltaTipo: tipo,
-    faltaMotivo: null,
-  });
-}
