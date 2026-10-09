@@ -21,7 +21,7 @@ import {
   SesionEnCursoSchema,
   SesionSchema,
 } from "../domain/sesion.domain";
-import { COLLECTIONS } from "../../../core/utils/colecciones";
+import { COLLECTIONS } from "../../../core/constants/colecciones";
 
 export const SesionRepository = {
   // METODO: obtener la sesión de hoy de una sala
@@ -38,7 +38,7 @@ export const SesionRepository = {
     return SesionSchema.parse({ sesionId: docSnap.id, ...docSnap.data() });
   },
 
-  // METODO: crea la sesión en_curso, generando el PIN antes de llamar aquí
+  // METODO: crea la sesión (pendiente o en_curso)
   async startSesion(input: CrearSesionInput): Promise<Sesion> {
     const docRef = doc(collection(db, COLLECTIONS.SESIONES));
     const sesion: Sesion = SesionSchema.parse({
@@ -106,7 +106,6 @@ export const SesionRepository = {
     return SesionEnCursoSchema.parse(resultado);
   },
 
-  
   //METODO: realizar el check-in de un usuario por PIN
   async checkIn(
     sesionId: string,
@@ -114,7 +113,13 @@ export const SesionRepository = {
     estado: "a_tiempo" | "retraso" = "a_tiempo",
     motivo: string | null = null,
   ): Promise<void> {
-    const checkinRef = doc(db, COLLECTIONS.SESIONES, sesionId, COLLECTIONS.CHECKINS, userUid);
+    const checkinRef = doc(
+      db,
+      COLLECTIONS.SESIONES,
+      sesionId,
+      COLLECTIONS.CHECKINS,
+      userUid,
+    );
 
     await setDoc(checkinRef, {
       checkinUserUid: userUid,
@@ -128,7 +133,7 @@ export const SesionRepository = {
   suscribeToCheckin(
     sesionId: string,
     userUid: string,
-    onUpdate: (existe: boolean) => void
+    onUpdate: (existe: boolean) => void,
   ) {
     const checkinRef = doc(db, "sesiones", sesionId, "checkins", userUid);
     return onSnapshot(checkinRef, (docSnap) => {

@@ -18,11 +18,12 @@ import {
   type Sala,
   SalaPreview,
   SalaPreviewSchema,
-} from "../domain/sala.schema";
+  HoraInicioSchema,
+} from "../domain/sala.domain";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { db, firebaseApp } from "../../../shared/services/firebase";
 import { FindRoomByCodeRequest, FindRoomByCodeResponse } from "./dto/salas.dto";
-import { COLLECTIONS } from "../../../core/utils/colecciones";
+import { COLLECTIONS } from "../../../core/constants/colecciones";
 
 const functions = getFunctions(firebaseApp);
 
@@ -66,24 +67,33 @@ export async function createRoom(
 export async function findByInvitationCode(
   salaCodigoInvitacion: string,
 ): Promise<SalaPreview | null> {
-  const callable = httpsCallable<FindRoomByCodeRequest, FindRoomByCodeResponse>(
-    functions,
-    "findRoomByCode",
-  );
-
+  //llamamos a la cloud function para hacerlo desde el firebase_admin
+  const functions = getFunctions(firebaseApp);
+  const callable = httpsCallable(functions, "findRoomByCode");
   const result = await callable({ salaCodigoInvitacion });
 
-  if (!result.data.sala) return null;
-
-  return SalaPreviewSchema.parse(result.data.sala);
+  //obtenemos el dato de la sala y lo guardamos en la variable
+  const data = result.data as { sala: SalaPreview | null };
+  return data.sala;
 }
 
 // MÉTODO: agrega un userUid al array de miembros de una sala
 export async function joinRoom(salaId: string, userUid: string): Promise<void> {
-  const ref = doc(db, "salas", salaId);
+  const ref = doc(db, COLLECTIONS.SALAS, salaId);
   await updateDoc(ref, {
     salaMiembros: arrayUnion(userUid),
   });
+}
+
+//METODO: actualiza la hora de inicio de una sala
+export async function updateStartTime(
+  salaId: string,
+  nuevaHora: string,
+): Promise<void> {
+  const salaHoraInicio = HoraInicioSchema.parse(nuevaHora);
+
+  const ref = doc(db, COLLECTIONS.SALAS, salaId);
+  await updateDoc(ref, { salaHoraInicio });
 }
 
 // MÉTODO: remueve al usuario de la sala, transfiere admin si corresponde, y limpia su referencia activa

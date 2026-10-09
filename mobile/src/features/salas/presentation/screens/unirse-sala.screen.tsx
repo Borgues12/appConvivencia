@@ -1,3 +1,4 @@
+// mobile/src/features/salas/presentation/screens/unirse-sala.screen.tsx
 import { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '../../../auth/presentation/store/use-auth-store';

@@ -4,4 +4,4 @@ import { initializeApp } from "firebase-admin/app";
 initializeApp();
 
 export { findRoomByCode } from "./salas/findRoomByCode.trigger";
-export { abrirCheckIn } from "./sesiones/openCheckIn.trigger";
+export { runSessionTick } from "./sesiones/sesionTick.trigger";

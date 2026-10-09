@@ -4,8 +4,9 @@ import { create } from "zustand";
 import { Sesion } from "../../domain/sesion.domain";
 import { SesionRepository } from "../../data/sesion.repository";
 import { generatePin } from "../../domain/generate-pin";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-
+import { CrearCheckinSchema, classifyCheckin } from "../../domain/checkin.domain";
+import { ZONA_HORARIA } from "../../../../core/constants/global";
+import { getEcuadorDate, getEcuadorTimeString } from "../../../../shared/services/hora";
 
 interface SesionState {
   sesionActual: Sesion | null;
@@ -26,13 +27,18 @@ interface SesionState {
     sesionId: string,
     userUid: string,
     pinIngresado: string,
+    salaHoraInicio: string,
+    motivo?: string | null,
   ) => Promise<void>;
   suscribeToMyCheckin: (sesionId: string, userUid: string) => () => void;
   suscribirseASesionDeHoy: (salaId: string) => () => void;
 }
 
-function getFechaHoy(): string {
-  return new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+export function getFechaHoy(): string {
+  // el locale "en-CA" formatea como YYYY-MM-DD
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ZONA_HORARIA,
+  }).format(new Date());
 }
 
 export const useSesionStore = create<SesionState>((set, get) => ({
@@ -77,15 +83,20 @@ export const useSesionStore = create<SesionState>((set, get) => ({
         return;
       }
 
+      const ahora = new Date();
+
       // caso borde: aún no existe doc (la Cloud Function de las 20:25 no ha corrido)
       const nuevaSesion = await SesionRepository.startSesion({
         sesionSalaId: salaId,
         sesionEstado: "en_curso",
         sesionPin: generatePin(),
         sesionIniciadaPorUid: userUid,
-        sesionFecha: fecha,
+        sesionFecha: getEcuadorDate(ahora),
         sesionCanceladaPorUid: null,
         sesionCanceladaMotivo: null,
+        sesionHoraInicio: getEcuadorTimeString(ahora),
+        sesionRetrasoNotificado: false,
+        
       });
 
       set({ sesionActual: nuevaSesion, sesionCargando: false });
@@ -99,7 +110,13 @@ export const useSesionStore = create<SesionState>((set, get) => ({
   },
 
   // METODO: realizar el check-in de un usuario por PIN
-  async CheckinForPin(sesionId, userUid, pinIngresado) {
+  async CheckinForPin(
+    sesionId,
+    userUid,
+    pinIngresado,
+    salaHoraInicio,
+    motivo = null,
+  ) {
     const { sesionActual } = get();
     if (!sesionActual) throw new Error("No hay sesión activa");
 
@@ -108,11 +125,26 @@ export const useSesionStore = create<SesionState>((set, get) => ({
       throw new Error("El PIN ingresado es incorrecto");
     }
 
+    //1. Clasificar la hora con la función pura del dominio
+    const estado = classifyCheckin(sesionActual.sesionHoraInicio, new Date(),);
+    if (estado === "fuera_de_ventana") {
+      throw new Error("El check-in ya no está disponible");
+    }
+
+    //2. Registrar el check-in
+    const motivoFinal = estado === "retraso" ? motivo : null;
+    CrearCheckinSchema.parse({
+      checkinUserUid: userUid,
+      checkinEstado: estado,
+      checkinMotivo: motivoFinal,
+      checkinHora: new Date(),
+    });
+
     set({ sesionCargando: true, sesionError: null });
 
     try {
       // Delegación completa al Repositorio
-      await SesionRepository.checkIn(sesionId, userUid, "a_tiempo", null);
+      await SesionRepository.checkIn(sesionId, userUid, estado, motivoFinal);
       set({ yaHiceCheckin: true, sesionCargando: false });
     } catch (err) {
       const msj =
@@ -123,12 +155,11 @@ export const useSesionStore = create<SesionState>((set, get) => ({
   },
 
   suscribeToMyCheckin(sesionId, userUid) {
-    return SesionRepository.suscribeToCheckin(
-      sesionId,
-      userUid,
-      (existe) => set({ yaHiceCheckin: existe })
+    return SesionRepository.suscribeToCheckin(sesionId, userUid, (existe) =>
+      set({ yaHiceCheckin: existe }),
     );
   },
+
 
   async cancelarSesionPorAdmin(
     sesionId: string,

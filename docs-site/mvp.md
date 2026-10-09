@@ -1,51 +1,79 @@
-# Convivencia Audiovisual — Modelo del MVP
 
-## ◆ Visión General
+# Checklist de Requerimientos — Versión Beta / MVP
 
-	▸ Modelo de datos preparado para multi-sala desde el día 1, pero probado en producción con una sola sala real antes de invitar a otras
-	▸ Prioridad de desarrollo: Sesión y Cancelar Sesion (simplificar flujo), luego Faltas sobre esa base, luego Películas, luego Series, y Cine al final
-	▸ El nuevo modelo de Sesión con PIN reemplaza el registro individual de llegada; se construye como pieza propia porque Faltas depende de ella, no al revés
+## 1. Módulo Sala y Autenticación
 
-## ◆ Alcance por Módulo
+* [ ] **Autenticación:** Registro e inicio de sesión con correo y contraseña vía Firebase Auth.
+* [ ] **Creación de Sala:** Permite a un usuario crear una sala privada, asignándole un nombre y nombrándolo administrador.
+* [ ] **Unión por Código:** Permite a cualquier usuario unirse a una sala ingresando un código único de 6 caracteres.
+* [ ] **Membresía:** Restricción de acceso para que los datos de la sala solo sean visibles/modificables por sus miembros activos (2 a 10 personas).
 
-### Sala
+---
+## 2. Módulo Sesión (Flujo Diario con Tiempos Dinámicos)
 
-	▸ Login con Firebase Auth
-	▸ Crear sala o unirse mediante código de invitación
+* [ ] **Configuración por Admin:** El administrador puede modificar la `HORA_INICIO` de la sala (valor por defecto: `20:25`).
+* [ ] **Apertura de Ventana (`HORA_INICIO`):**
+* Disparo de notificación push a toda la sala.
+* Creación automática de la sesión del día en estado `pendiente`, copiando la `HORA_INICIO` vigente de la sala como `sesionHoraInicio`.
 
-### Sesión (nuevo, prerequisito de Faltas)
 
-	▸ Apertura de ventana de check-in a las 20:25 vía notificación, estado pendiente
-	▸ Inicio manual por el primer miembro presente, genera PIN de 3 dígitos, estado en_curso
-	▸ Check-in por PIN: a_tiempo (20:25-20:35) o retraso con motivo obligatorio (20:35-21:00)
-	▸ Cierre automático a las 21:00 vía Cloud Function: falta para ausentes, o cancelada con falta para todos si nadie inició sesión
-	▸ Sincronización en tiempo real de estado entre dispositivos
+* [ ] **Inicio Manual con PIN:**
+* Un miembro presente presiona "Iniciar Sesión" para pasar el estado a `en_curso`.
+* Generación de un PIN dinámico de 3 dígitos, visible únicamente en el dispositivo del iniciador.
 
-### Cancelar
-   	▸ Ante cualquier razon establecer un boton para admin para cancelar la sesion sin consecuencias para ningun miembro registrando la razon de la cancelacion
 
-### Faltas
+* [ ] **Check-in A Tiempo (`sesionHoraInicio` a +10 min):**
+* El miembro ingresa el PIN dinámico en su app.
+* El sistema valida el PIN y registra la asistencia como `a_tiempo`.
 
-	▸ Contador e historial por persona, alimentado por el resultado de cada Sesión diaria
-	▸ Escala de penalización (3/5/7) fuera del MVP en su versión completa; en Ola 1 solo se lleva el contador simple
 
-### Películas
+* [ ] **Check-in con Retraso (+10 a +35 min):**
+* El miembro ingresa el PIN dinámico.
+* Se despliega un modal que exige redactar un motivo corto (mínimo de caracteres validado) para habilitar el envío.
+* El sistema registra el estado como `retraso`.
 
-	▸ Búsqueda TMDB, 1 propuesta por miembro activo de la sala
-	▸ Ruleta virtual para el sorteo
-	▸ Historial: título, quién propuso, resultado, fecha
 
-### Series
+* [ ] **Cierre Automático por Cloud Function (+36 min):**
+* Si la sesión está `en_curso`, asigna falta automática a los miembros que no ingresaron PIN.
+* Si la sesión se quedó en `pendiente` (nadie inició sesión), cambia el estado a `perdida` y asigna falta automática a todos los miembros de la sala por abandono.
+* Si la sesión está `cancelada`, el cierre no evalúa faltas ni ausencias para nadie.
 
-	▸ Búsqueda TMDB, propuestas, ruleta virtual, historial
-	▸ Cronograma automático de episodios entra si el tiempo alcanza, si no pasa a Ola 2
 
-## ◆ Fuera del MVP
+* [ ] **Sincronización:** Actualización en tiempo real mediante listeners de Firestore para que todos los dispositivos vean los cambios de estado al instante.
 
-	▸ Aplazamiento de las sesiones con concenso mayor
-	▸ Módulo Cine completo (pero su futuro aplazamiento ya reutilizará el mecanismo genérico construido en Sesión)
-	▸ Carta de Ventaja con pulido visual y su efecto en la ruleta
-	▸ Escalas de penalización de 5 y 7 faltas
-	▸ Sistema de justificantes con flujo de aprobación
-	▸ Gestión avanzada de roles dentro de la sala
-	▸ Documentación exhaustiva en Docusaurus, se profundiza con el uso real
+---
+
+## 3. Módulo Cancelación Administrativa
+
+* [ ] **Acción de Admin:** Botón visible únicamente para el creador/admin de la sala, para cancelar la sesión por fuerza mayor en cualquier momento del día (antes o después del cierre).
+* [ ] **Motivo Obligatorio:** Formulario que exige al admin ingresar la razón de la cancelación antes de procesarla.
+* [ ] **Efecto de Cancelación:** La sesión pasa a `cancelada` y el sistema ignora el cálculo de faltas o ausencias para todos los miembros ese día, sin importar si ya había check-ins o faltas registradas antes de cancelar.
+
+---
+
+## 4. Módulo Faltas (Versión Simplificada)
+
+* [ ] **Registro Automático:** Generación de registros en la colección de faltas al momento del cierre de sesión o check-in con retraso.
+* [ ] **Contador e Historial:** Pantalla que muestra el total acumulado de faltas/retrasos por persona y la lista histórica con fecha y motivo registrado.
+
+---
+
+## 5. Módulo Películas
+
+* [ ] **Búsqueda TMDB:** Buscador integrado mediante Axios a la API de TMDB para obtener título, portada, sinopsis y género.
+* [ ] **Propuestas por Sala:** Habilita el registro de exactamente 1 propuesta de película por cada miembro activo de la sala.
+* [ ] **Sorteo por Ruleta:**
+* Ruleta virtual interactiva que carga las propuestas activas de la sala.
+* Selección aleatoria al girar la ruleta y despliegue de la película ganadora.
+
+
+* [ ] **Historial de Elección:** Guardado automático del resultado con título, quién la propuso, fecha y estado de vista.
+
+---
+
+## 6. Módulo Series
+
+* [ ] **Búsqueda TMDB:** Integración para buscar y seleccionar series desde TMDB.
+* [ ] **Propuestas:** Permitir 1 propuesta por miembro activo.
+* [ ] **Sorteo Reutilizable:** Reutilización del mismo componente de ruleta virtual usado en Películas para realizar la selección.
+* [ ] **Historial de Series:** Registro de las series elegidas y la persona que las propuso.

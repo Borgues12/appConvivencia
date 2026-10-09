@@ -1,177 +1,123 @@
-# Convivencia Audiovisual — Requerimientos y Stack
+# Documento de Requerimientos y Reglas de Negocio — Convivencia Audiovisual
 
-## ◆ Información General
+## 1. Información General
 
-### Objetivo
+### 1.1 Objetivo del Sistema
+Aplicar y gestionar un Acuerdo de Convivencia Audiovisual entre los miembros de una sala privada (de 2 a 10 personas) mediante una aplicación móvil.
 
-	▸ App móvil privada para gestionar un Acuerdo de Convivencia Audiovisual entre los miembros de una sala (2 a 10 personas)
-	▸ Proyecto de práctica técnica y portafolio orientado a trabajo remoto en desarrollo de software
+---
 
-## ◆ Estructura del Repositorio
+## 2. Gestión de Salas y Acceso
 
-	▸ mobile/ — app React Native + Expo
-	▸ backend/ — Firebase (Firestore, Auth, Cloud Functions), sin servidor propio
-	▸ docs-site/ — sitio Docusaurus, publicado en GitHub Pages
+### 2.1 Creación e Ingreso a Salas
+* **Capacidad:** Las salas soportan entre 2 y 10 miembros activos.
+* **Unión por Código:** Un usuario se une a una sala existente mediante un código único de invitación de 6 caracteres.
+* **Roles:**
+  * **Administrador:** Creador de la sala.
+  * **Miembro:** Usuario unido mediante código.
+* **Notificaciones:** Cada sala dispone de un canal de notificaciones Push independiente (`sala_{salaId}`).
 
-## ◆ Stack Tecnológico
+### 2.2 Seguridad y Control de Acceso
+* **Validación de Membresía:** Las reglas de seguridad de la base de datos deben validar la pertenencia del usuario a la sala antes de conceder acceso de lectura o escritura a cualquier entidad.
 
-### Frontend
+---
 
-	▸ React Native con Expo (managed workflow)
-	▸ Zustand para estado local de la app (sesión, UI, filtros)
-	▸ TanStack Query para datos remotos (Firestore, TMDB), con cache y estados de carga/error
-	▸ React Navigation para navegación
-	▸ TypeScript + Zod para modelos y validación
-	▸ axios como cliente HTTP para TMDB
-	▸ expo-image para cache de imágenes
+## 3. Módulo Sesión
 
-### Backend y Datos
+### 3.1 Propósito
+Representa la jornada diaria compartida por todos los miembros de la sala. Reemplaza el registro individual de llegada y sirve como la fuente de verdad sobre la cual se calculan las faltas o asistencias.
 
-	▸ Firebase Authentication
-	▸ Firestore como base de datos, colecciones planas
-	▸ Cloud Functions (Node/TypeScript) para lógica automática de faltas y cierre de sesión
-	▸ Firestore listeners en tiempo real para sincronizar estado de sesión y confirmaciones de aplazamiento entre dispositivos
-	▸ Firebase Cloud Messaging para notificaciones
+### 3.2 Ciclo de Vida y Estados de la Sesión
+* **Estados posibles:** `pendiente` → `en_curso` → (`a_tiempo` / `retraso` por miembro) | `aplazada` | `cancelada`.
 
-### Documentación y Distribución
+### 3.3 Flujo Diario y Reglas de Apertura
+* **Notificación de Apertura (`HORA_INICIO`):** El sistema notifica automáticamente a la sala sobre la apertura de la ventana de check-in y marca la sesión del día como `pendiente`.
+* **Apertura Manual Obligatoria:** Un miembro presente físicamente debe presionar "Iniciar Sesión" en la app para cambiar el estado a `en_curso`.
+  * **Regla estricta:** El sistema nunca inicia una sesión de forma automática. Si nadie presiona el botón, la sesión permanece en `pendiente`.
+* **Generación de PIN:** Al iniciar la sesión, la app genera un PIN dinámico de 3 dígitos visible únicamente en el dispositivo del miembro que inició.
 
-	▸ Docusaurus para documentación técnica, hosting gratuito en GitHub Pages
-	▸ EAS Internal Distribution para compartir builds (.apk / ad hoc) sin pasar por tiendas
-	▸ pnpm como único gestor de paquetes
+### 3.4 Check-in por Proximidad (PIN)
+Para registrar asistencia, los miembros presentes deben ingresar en sus propios dispositivos el PIN dinámico mostrado por el iniciador.
 
-## ◆ Entorno de Desarrollo y Distribución
+* **Ventana A Tiempo (`HORA_INICIO` a +10 min):** Check-in con PIN correcto se registra como `a_tiempo`.
+* **Ventana Retraso (+10 a +35 min):** Check-in con PIN correcto se registra como `retraso`.
+  * Requiere obligatoriamente redactar un motivo corto (con longitud mínima validada) para habilitar el botón de envío.
 
-### Build y ejecución local
+### 3.5 Cierre Automático de Sesión (`HORA_INICIO` +36 min)
+El sistema evalúa el estado final de la jornada de forma automática:
 
-	▸ EAS Build con perfil development (developmentClient: true, distribution: internal), no Expo Go, por incompatibilidad de Expo Go con módulos nativos como Firebase
-	▸ Instalación del build en dispositivo físico vía adb install cuando la instalación por descarga directa falla en Android
-	▸ Conexión al bundler local mediante npx expo start --dev-client, con el dispositivo en la misma red WiFi que la máquina de desarrollo
-	▸ eas build:run -p android disponible para instalar directo en emulador o dispositivo detectado por adb devices
+* **Evaluación de Ausencias:** Si la sesión está `en_curso`, los miembros que no ingresaron el PIN reciben una falta automática por ausencia.
+* **Abandono de Regla:** Si la sesión continúa en `pendiente` (ningún miembro inició la sesión y no hubo aplazamiento previo), la sesión pasa a `cancelada` y se genera una falta automática a **todos** los miembros de la sala.
+* **Sesión Aplazada:** Si la sesión alcanzó el estado `aplazada` antes del cierre, el sistema ignora la fecha y no genera faltas ni altera contadores.
 
-### Configuración EAS (eas.json)
+### 3.6 Sincronización en Tiempo Real
+Cualquier cambio de estado en la sesión o confirmación de aplazamiento se propaga inmediatamente a los dispositivos de todos los miembros activos.
 
-	▸ Perfil development: developmentClient true, distribution internal
-	▸ Perfil preview: distribution internal, sin developmentClient
-	▸ Perfil production: autoIncrement activado
-	▸ appVersionSource remote, el versionado lo gestionan los servidores de EAS
+---
 
-## ◆ Arquitectura
+## 4. Módulo Aplazamiento (Transversal)
 
-### Patrón general
+### 4.1 Propósito
+Mecanismo reutilizable para posponer eventos programados de la sala (Sesión diaria, visitas a Cine, etc.) sin generar penalizaciones.
 
-	▸ Clean Architecture simplificada por feature: data / domain / presentation
-	▸ Repository Pattern obligatorio: ninguna pantalla accede directo a Firestore ni a TMDB
-	▸ Cada feature expone sus repositorios mediante stores de Zustand o hooks de TanStack Query
+### 4.2 Reglas y Flujo de Consenso
+* **Solicitud:** Cualquier miembro puede solicitar el aplazamiento dentro de la ventana permitida (ej. 20:00 a 21:00 para la sesión diaria) indicando una razón.
+* **Alerta en Tiempo Real:** El sistema notifica de inmediato a los demás miembros con una alerta visual en pantalla.
+* **Regla de Consenso:** Requiere la aprobación explícita del **100% de los miembros activos** de la sala.
+* **Efecto:** Al completarse el consenso, el evento referenciado pasa al estado `aplazado` y se cancela cualquier penalización asociada a esa fecha.
 
-### Estructura de carpetas (mobile/src/)
+---
 
-	▸ core/ — constantes, tema visual Art Decó, utilidades, errores
-	▸ features/salas, features/faltas, features/peliculas, features/series, features/cine
-	▸ shared/ — componentes y servicios reutilizables (Firebase, notificaciones, aplazamiento)
+## 5. Módulo Faltas
 
-## ◆ Modelo de Datos Multi-Sala
+### 5.1 Registro y Cálculo
+* Las faltas o retrasos son determinados por el resultado del Módulo Sesión (`a_tiempo`, `retraso`, o `falta` por ausencia/abandono).
+* Requiere motivo descriptivo obligatorio para cualquier registro en ventana de retraso.
 
-### Colecciones Firestore
+### 5.2 Escala de Penalización y Recompensas
+* **3 Faltas:** Habilita el beneficio "Carta de Ventaja".
+* **5 Faltas:** Genera penalización de aportación de botana/dulce para la sala.
+* **7 Faltas:** Otorga inmunidad temporal y reinicia el contador acumulado de faltas a cero.
 
-	▸ salas/{salaId} — nombre, código de invitación, miembros, configuración de horarios
-	▸ faltas/{id}, peliculas/{id}, series/{id}, cine/{id} — mismo patrón, con campo salaId
-	▸ sesiones/{id} — nueva colección, representa la jornada diaria de una sala, con campo salaId
-	▸ aplazamientos/{id} — nueva colección compartida entre módulos, con campo salaId y referencia al módulo/evento que aplaza
-	▸ Sin anidación profunda: colecciones planas filtradas por salaId en cada consulta
+### 5.3 Sistema de Justificantes
+* Permite solicitar la anulación de una penalización mediante una justificación formal sujeta a proceso de aprobación.
 
-### Ingreso y seguridad
+---
 
-	▸ Unirse a una sala mediante código corto de invitación (6 caracteres)
-	▸ Roles: admin (creador) y miembro; sin gestión avanzada de roles en MVP
-	▸ Firestore Security Rules deben validar membresía en la sala desde el primer commit del módulo, no como tarea postergable
-	▸ Notificaciones vía FCM Topic por sala (sala_{salaId})
+## 6. Módulo Películas
 
-## ◆ Módulo Sesión (nuevo, base de Faltas)
+### 6.1 Propuestas
+* **Propuestas Dinámicas:** Se habilita exactamente 1 propuesta de película por cada miembro activo de la sala (mínimo 2, máximo 10 opciones).
+* **Integración TMDB:** Búsqueda e importación de metadatos (portada, sinopsis, duración, género) desde la API de TMDB.
 
-### Propósito
+### 6.2 Selección por Ruleta Virtual
+* La elección de la película a ver se realiza mediante una ruleta virtual integrada en la app.
+* **Efecto Carta de Ventaja:** Si un miembro posee la Carta de Ventaja activa, su propuesta obtiene el doble de espacio (doble de probabilidad) dentro de la ruleta.
 
-	▸ Reemplaza el registro individual de llegada por un modelo de sesión diaria compartida por toda la sala
-	▸ Es la pieza de dominio de la que depende Faltas; Faltas ya no calcula retraso por persona de forma aislada, sino que lee el resultado de la sesión del día
+---
 
-### Ciclo de vida de la sesión
+## 7. Módulo Series
 
-	▸ Estados: pendiente → en_curso → (a_tiempo / retraso por miembro) | aplazada | cancelada
-	▸ 20:25 — Cloud Function programada marca la sesión del día como pendiente y dispara notificación push a toda la sala anunciando apertura de check-in
-	▸ Inicio manual obligatorio: un miembro presente físicamente presiona "Iniciar Sesión", cambia el estado a en_curso y genera un PIN dinámico de 3 dígitos, visible solo en su dispositivo
-	▸ Regla no negociable de dominio: el servidor nunca genera ni abre una sesión por sí solo; siempre requiere la acción de una persona real presionando el botón
+### 7.1 Propuestas y Selección
+* **Propuestas:** 1 serie por cada miembro activo de la sala.
+* **Sorteo:** Utiliza el mismo componente reutilizable de ruleta virtual que el Módulo Películas.
 
-### Check-in por PIN
+### 7.2 Programación según Duración de Episodio
+El cronograma de emisión en la sesión diaria se determina por la duración de los episodios:
+* **Menos de 15 minutos:** 4 episodios por sesión.
+* **De 15 a 30 minutos:** 2 episodios por sesión.
+* **Más de 40 minutos:** 1 episodio por sesión.
 
-	▸ El PIN de proximidad exige que cada miembro esté físicamente junto al iniciador para leerlo e ingresarlo en su propia app
-	▸ 20:25 a 20:35 — check-in con PIN correcto se registra como a_tiempo
-	▸ 20:35 a 21:00 — check-in con PIN correcto se registra como retraso, y bloquea el envío hasta que el usuario redacte un motivo corto que cumpla una longitud mínima validada en el modal
+### 7.3 Restricción entre Temporadas
+* Se exige un periodo de bloqueo obligatorio de **3 días** tras finalizar una temporada antes de poder registrar o proponer nuevas series.
 
-### Aplazamiento aplicado a Sesión
+---
 
-	▸ Cualquier miembro puede solicitar aplazamiento de la sesión del día entre las 20:00 y las 21:00, usando el mecanismo genérico de Aplazamiento (ver sección propia)
-	▸ Al completarse el consenso requerido, la sesión pasa a aplazada: no se generan faltas ni se alteran contadores de nadie ese día
+## 8. Módulo Cine
 
-### Cierre automático — Cloud Function (21:01)
+### 8.1 Registro y Asistencia
+* Permite programar salidas o visitas al cine notificando a la sala.
+* Registro individual de asistencia con asignación de penalización en caso de inasistencia no justificada.
 
-	▸ Sesión en en_curso con miembros que nunca ingresaron el PIN: se genera falta automática solo para los ausentes
-	▸ Sesión que sigue en pendiente (nadie presionó "Iniciar Sesión" y no hubo aplazamiento completado): pasa a cancelada y se genera falta automática para todos los miembros de la sala, por abandono de la regla del día
-	▸ Sesión en aplazada: la Cloud Function la ignora por completo esa fecha, sin tocar faltas ni contadores
-
-### Sincronización en tiempo real
-
-	▸ Cambios de estado de sesión (pendiente / en_curso / aplazada / cancelada) y confirmaciones de aplazamiento se propagan de inmediato a todos los dispositivos de la sala vía Firestore listeners, sin necesidad de refrescar manualmente
-
-## ◆ Módulo Aplazamiento (nuevo, transversal)
-
-### Propósito
-
-	▸ Mecanismo genérico y reutilizable para posponer cualquier evento programado de cualquier módulo (sesión diaria de Faltas, visita de Cine a futuro, u otro evento con fecha fija), no exclusivo de un solo módulo
-	▸ Vive en shared/, expuesto como repositorio único que cualquier feature puede invocar indicando a qué entidad y salaId aplica
-
-### Flujo
-
-	▸ Un miembro presiona "Solicitar Aplazamiento", ingresa una razón, y el sistema referencia el evento específico que se aplaza (ej. sesión del día, visita de cine)
-	▸ Se despliega alerta visual a los demás miembros activos de la sala en tiempo real
-	▸ Requiere aprobación del 100% de los miembros activos de la sala para confirmarse (regla fija para el MVP, sin variantes de mayoría todavía)
-	▸ Al completar el consenso, el evento referenciado pasa a su estado de aplazado correspondiente, sin penalización para nadie
-
-## ◆ Módulo Faltas
-
-### Reglas de negocio
-
-	▸ El resultado de Faltas depende del ciclo de vida de Sesión: a_tiempo, retraso, o falta automática por ausencia, cancelación o abandono (ver Módulo Sesión)
-	▸ Umbral de retraso vigente: ventana 20:25-20:35 cuenta como a_tiempo, 20:35-21:00 como retraso; ya no se calcula como "más de 5 minutos desde las 20:30" sobre un registro individual
-	▸ Motivo corto obligatorio en cualquier check-in con retraso
-	▸ Escala de penalización se mantiene sin cambios: 3 faltas habilita Carta de Ventaja; 5 genera botana/dulce; 7 da inmunidad y reinicia el contador
-	▸ Sistema de justificantes para tardanza/falta: el miembro solicita anular la penalización con un motivo, sujeto a aprobación (a definir quién aprueba — ¿admin de sala, votación, o automático bajo ciertas condiciones?). No confundir con el campo `motivo` actual, que es solo descriptivo y no anula la falta. Se define con feedback real de uso, según Reglas No Negociables
-	▸ Solicitud de aplazamiento sobre cualquier evento programado (Sesión en el MVP; Cine queda preparado para reutilizarlo después)
-	▸ Consenso del 100% de miembros activos, alerta en tiempo real
-	▸ Al confirmarse, el evento queda aplazado sin penalización para nadie
-	
-## ◆ Módulo Películas
-
-### Configuración de propuestas
-
-	▸ Propuestas dinámicas según miembros activos de la sala: 1 propuesta por persona
-	▸ Con 2 miembros hay 2 opciones, con 10 miembros hay 10 opciones; no hay número fijo
-	▸ Búsqueda de películas vía TMDB: portada, sinopsis, duración, género
-
-### Sorteo — ruleta virtual
-
-	▸ Cambio respecto al documento original: se reemplaza el sorteo físico con cartas por una ruleta virtual dentro de la app, igual que en Series, porque el sorteo físico deja de ser práctico con una sala de tamaño variable
-	▸ El mismo componente de ruleta se reutiliza entre Películas y Series
-	▸ Si un miembro tiene la Carta de Ventaja activa, su propuesta ocupa dos espacios en la ruleta en vez de uno
-
-## ◆ Módulo Series
-
-### Reglas
-
-	▸ Cada miembro propone 1 serie, mismo criterio dinámico que Películas
-	▸ Ruleta virtual ya definida en el documento original; se mantiene y se comparte con Películas
-	▸ Cronograma según duración de episodio: menos de 15 min, 4 episodios por sesión; 15 a 30 min, 2 por sesión; más de 40 min, 1 por sesión
-	▸ 3 días de bloqueo entre temporadas antes de proponer nuevas series
-
-## ◆ Módulo Cine
-
-	▸ Registro de visita programada, asistencia por persona, penalización si no asiste
-	▸ El aplazamiento por acuerdo mutuo ya no es lógica propia del módulo: usa el mecanismo genérico de Aplazamiento definido arriba
+### 8.2 Aplazamientos
+* Las visitas de cine reutilizan la lógica transversal del **Módulo Aplazamiento** (consenso del 100% de los miembros) para reprogramar fechas sin penalización.

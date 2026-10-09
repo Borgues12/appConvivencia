@@ -12,8 +12,8 @@
     ▸ No pedir confirmación de contexto si la arquitectura ya está descrita en requerimientos-y-stack.md; asumirla y ejecutar directo.
     ▸ Si una tarea requiere tocar otro archivo o dependencia adicional, hacerlo sin preguntar y dejar una nota breve al final de la respuesta.
     ▸ No rehacer ni analizar el sistema completo salvo que la tarea lo exija explícitamente.
-    ▸ Manejo de dependencias: Todos los paquetes deben ser instalados únicamente usando `pnpm`.
-    ▸ Código listo para producción: TypeScript estricto, pnpm y las herramientas definidas en requerimientos-y-stack.md.
+    ▸ Manejo de dependencias: Todos los paquetes deben ser instalados únicamente usando `pnpm` en mobile y `npm` en functions.
+    ▸ Código listo para producción: TypeScript estricto, pnpm (mobile) y las herramientas definidas en requerimientos-y-stack.md.
 	▸ No ejecutar codigo, sino mostrar secciones a modificar mas explicacion minuscula pero precisa de como funciona su idea general (ayuda al flujo de aprendizaje debido a que es la primera aplicacion en react native)
 
 ### Documentos de referencia

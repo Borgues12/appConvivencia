@@ -23,9 +23,13 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.salaMiembros
         && request.resource.data.salaMiembros ==
              resource.data.salaMiembros.concat([request.auth.uid])
-        && request.resource.data.salaNombre == resource.data.salaNombre
-        && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion
-        && request.resource.data.salaAdminUid == resource.data.salaAdminUid;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['salaMiembros']);
+
+      // Configurar horario: solo el admin, y solo puede cambiar salaHoraInicio
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.salaAdminUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['salaHoraInicio'])
+        && request.resource.data.salaHoraInicio.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
 
       // Salir (no-admin): quita el propio uid, el admin no cambia
       allow update: if request.auth != null
@@ -33,9 +37,7 @@ service cloud.firestore {
         && !(request.auth.uid in request.resource.data.salaMiembros)
         && request.resource.data.salaMiembros ==
              resource.data.salaMiembros.removeAll([request.auth.uid])
-        && request.resource.data.salaNombre == resource.data.salaNombre
-        && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion
-        && request.resource.data.salaAdminUid == resource.data.salaAdminUid;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['salaMiembros']);
 
       // Salir (admin): quita el propio uid y transfiere salaAdminUid a alguien
       // que siga en la sala; bloqueado si el admin es el único miembro
@@ -47,8 +49,7 @@ service cloud.firestore {
              resource.data.salaMiembros.removeAll([request.auth.uid])
         && request.resource.data.salaAdminUid != request.auth.uid
         && request.resource.data.salaAdminUid in request.resource.data.salaMiembros
-        && request.resource.data.salaNombre == resource.data.salaNombre
-        && request.resource.data.salaCodigoInvitacion == resource.data.salaCodigoInvitacion;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['salaMiembros', 'salaAdminUid']);
     }
     match /sesiones/{sesionId} {
       // Lectura
@@ -62,6 +63,9 @@ service cloud.firestore {
         && request.resource.data.sesionEstado == 'en_curso'
         && request.resource.data.sesionIniciadaPorUid == request.auth.uid
         && request.resource.data.sesionPin is string
+        && request.resource.data.sesionPin.matches('^[0-9]{4}$')
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['sesionEstado', 'sesionPin', 'sesionIniciadaPorUid'])
         && request.resource.data.sesionSalaId == resource.data.sesionSalaId
         && request.resource.data.sesionFecha == resource.data.sesionFecha;
 
@@ -74,7 +78,9 @@ service cloud.firestore {
         && request.resource.data.sesionCanceladaMotivo is string
         && request.resource.data.sesionCanceladaMotivo.size() > 0
         && request.resource.data.sesionSalaId == resource.data.sesionSalaId
-        && request.resource.data.sesionFecha == resource.data.sesionFecha;
+        && request.resource.data.sesionFecha == resource.data.sesionFecha
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['sesionEstado', 'sesionCanceladaPorUid', 'sesionCanceladaMotivo']);
 
       // SUBCOLECCIÓN: /sesiones/{sesionId}/checkins/{checkinUid}
       match /checkins/{checkinUid} {
@@ -84,9 +90,16 @@ service cloud.firestore {
 
         // Creación: cada miembro registra su propio check-in
         allow create: if request.auth != null
-          && request.auth.uid == checkinUid
-          && request.resource.data.checkinUserUid == checkinUid
-          && request.resource.data.checkinEstado in ['a_tiempo', 'retraso'];
+        && request.auth.uid == checkinUid
+        && request.resource.data.keys().hasOnly(
+            ['checkinUserUid', 'checkinEstado', 'checkinMotivo', 'checkinHora'])
+        && request.resource.data.checkinUserUid == checkinUid
+        && request.resource.data.checkinEstado in ['a_tiempo', 'retraso']
+        && (request.resource.data.checkinEstado == 'a_tiempo'
+            || (request.resource.data.checkinMotivo is string
+                && request.resource.data.checkinMotivo.trim().size() >= 10))
+        && getAfter(/databases/$(database)/documents/sesiones/$(sesionId)).data.sesionEstado == 'en_curso'
+        && request.auth.uid in get(/databases/$(database)/documents/salas/$(get(/databases/$(database)/documents/sesiones/$(sesionId)).data.sesionSalaId)).data.salaMiembros;
       }
     }
 }

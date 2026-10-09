@@ -1,3 +1,4 @@
+// functions/src/salas/findRoomByCode.trigger.ts
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
 import { findRoomByInvitationCode } from "./buscarSalaPorCodigo.logica";
@@ -8,10 +9,17 @@ export const findRoomByCode = onCall(async (request) => {
   }
 
   const { salaCodigoInvitacion } = request.data;
-  if (!salaCodigoInvitacion || salaCodigoInvitacion.length !== 6) {
+  
+  if (
+    typeof salaCodigoInvitacion !== "string" ||
+    salaCodigoInvitacion.length !== 6
+  ) {
     throw new HttpsError("invalid-argument", "Código inválido");
   }
 
-  const sala = await findRoomByInvitationCode(getFirestore(), salaCodigoInvitacion);
+  const sala = await findRoomByInvitationCode(
+    getFirestore(),
+    salaCodigoInvitacion,
+  );
   return { sala };
 });
